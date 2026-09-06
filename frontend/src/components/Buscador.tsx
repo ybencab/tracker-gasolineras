@@ -40,6 +40,7 @@ export default function Buscador() {
   const [provinciaId, setProvinciaId] = useState("");
   const [municipioId, setMunicipioId] = useState("");
   const [combustible, setCombustible] = useState("");
+  const [ordenAscendente, setOrdenAscendente] = useState(true);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,10 +94,11 @@ export default function Buscador() {
 
   const estacionesFiltradas = useMemo(() => {
     if (!combustible) return estaciones;
+    const signo = ordenAscendente ? 1 : -1;
     return estaciones
       .filter((e) => combustible in e.precios)
-      .sort((a, b) => a.precios[combustible] - b.precios[combustible]);
-  }, [estaciones, combustible]);
+      .sort((a, b) => signo * (a.precios[combustible] - b.precios[combustible]));
+  }, [estaciones, combustible, ordenAscendente]);
 
   return (
     <div>
@@ -150,6 +152,18 @@ export default function Buscador() {
             ))}
           </select>
         </label>
+
+        {combustible && (
+          <div class="block sm:col-span-2">
+            <button
+              type="button"
+              onClick={() => setOrdenAscendente((v) => !v)}
+              class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              {ordenAscendente ? "↑ Menor a mayor precio" : "↓ Mayor a menor precio"}
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
