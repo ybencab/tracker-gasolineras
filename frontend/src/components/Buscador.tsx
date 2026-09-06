@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 
 const API_URL = import.meta.env.PUBLIC_API_URL;
 
@@ -25,6 +25,10 @@ interface EstacionesResponse {
   estaciones: Estacion[];
 }
 
+function formatPrecio(precio: number): string {
+  return precio.toLocaleString("es-ES", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+}
+
 const selectClass =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
 
@@ -35,6 +39,7 @@ export default function Buscador() {
   const [fecha, setFecha] = useState<string | null>(null);
   const [provinciaId, setProvinciaId] = useState("");
   const [municipioId, setMunicipioId] = useState("");
+  const [combustible, setCombustible] = useState("");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +68,7 @@ export default function Buscador() {
 
   useEffect(() => {
     setEstaciones([]);
+    setCombustible("");
     if (!municipioId) return;
 
     setCargando(true);
@@ -76,6 +82,21 @@ export default function Buscador() {
       .catch(() => setError("No se han podido cargar las estaciones."))
       .finally(() => setCargando(false));
   }, [municipioId]);
+
+  const combustiblesDisponibles = useMemo(() => {
+    const nombres = new Set<string>();
+    for (const estacion of estaciones) {
+      for (const nombre of Object.keys(estacion.precios)) nombres.add(nombre);
+    }
+    return [...nombres].sort();
+  }, [estaciones]);
+
+  const estacionesFiltradas = useMemo(() => {
+    if (!combustible) return estaciones;
+    return estaciones
+      .filter((e) => combustible in e.precios)
+      .sort((a, b) => a.precios[combustible] - b.precios[combustible]);
+  }, [estaciones, combustible]);
 
   return (
     <div>
@@ -112,6 +133,23 @@ export default function Buscador() {
             ))}
           </select>
         </label>
+
+        <label class="block sm:col-span-2">
+          <span class="mb-1 block text-sm font-medium text-slate-600">Combustible</span>
+          <select
+            class={selectClass}
+            value={combustible}
+            disabled={combustiblesDisponibles.length === 0}
+            onChange={(e) => setCombustible((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">Todos</option>
+            {combustiblesDisponibles.map((nombre) => (
+              <option value={nombre} key={nombre}>
+                {nombre}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {error && (
@@ -120,13 +158,13 @@ export default function Buscador() {
 
       {cargando && <p class="mt-6 text-center text-slate-400">Cargando estaciones...</p>}
 
-      {estaciones.length > 0 && (
+      {estacionesFiltradas.length > 0 && (
         <div class="mt-6">
           {fecha && (
             <p class="mb-3 text-sm text-slate-400">Precios actualizados: {fecha}</p>
           )}
           <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {estaciones.map((estacion) => (
+            {estacionesFiltradas.map((estacion) => (
               <li
                 key={estacion.id}
                 class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
@@ -134,12 +172,16 @@ export default function Buscador() {
                 <p class="font-semibold text-slate-900">{estacion.rotulo}</p>
                 <p class="mb-3 text-sm text-slate-500">{estacion.direccion}</p>
                 <ul class="flex flex-wrap gap-2">
-                  {Object.entries(estacion.precios).map(([combustible, precio]) => (
+                  {Object.entries(estacion.precios).map(([nombreCombustible, precio]) => (
                     <li
-                      key={combustible}
-                      class="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                      key={nombreCombustible}
+                      class={
+                        nombreCombustible === combustible
+                          ? "rounded-full bg-sky-600 px-3 py-1 text-xs font-semibold text-white"
+                          : "rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                      }
                     >
-                      {combustible}: {precio.toFixed(3)} €
+                      {nombreCombustible}: {formatPrecio(precio)} €
                     </li>
                   ))}
                 </ul>
@@ -147,6 +189,12 @@ export default function Buscador() {
             ))}
           </ul>
         </div>
+      )}
+
+      {!cargando && municipioId && estaciones.length > 0 && estacionesFiltradas.length === 0 && (
+        <p class="mt-6 text-center text-slate-400">
+          Ninguna estación de este municipio vende ese combustible.
+        </p>
       )}
 
       {!cargando && municipioId && estaciones.length === 0 && !error && (
