@@ -1,3 +1,4 @@
 /api
 *.exe
 *.test
+.env
