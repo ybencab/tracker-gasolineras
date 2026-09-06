@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tracker-gasolineras-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: GEOPORTAL_BASE_URL
+        value: https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes
+      - key: REFRESH_INTERVAL
+        value: 24h
+      - key: SNAPSHOT_PATH
+        value: ./data/snapshot.json
