@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import Buscador from "../components/Buscador";
+import ThemeToggle from "../components/ThemeToggle";
 ---
 
 <html lang="es">
@@ -11,17 +12,29 @@ import Buscador from "../components/Buscador";
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
 		<title>Precios de gasolineras</title>
+		<script is:inline>
+			const guardado = localStorage.getItem("theme");
+			const oscuro = guardado
+				? guardado === "dark"
+				: window.matchMedia("(prefers-color-scheme: dark)").matches;
+			document.documentElement.classList.toggle("dark", oscuro);
+		</script>
 	</head>
-	<body class="min-h-screen bg-slate-50 text-slate-800">
+	<body class="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100">
 		<div class="mx-auto max-w-3xl px-4 py-10">
-			<header class="mb-8 text-center">
-				<h1 class="text-3xl font-bold text-slate-900"> Precios de gasolineras</h1>
-				<p class="mt-1 text-slate-500">Consulta los precios de carburante por provincia y municipio</p>
+			<header class="mb-8 flex items-start justify-between gap-4">
+				<div class="flex-1 text-center">
+					<h1 class="text-3xl font-bold text-slate-900 dark:text-white">Precios de gasolineras</h1>
+					<p class="mt-1 text-slate-500 dark:text-slate-400">
+						Consulta los precios de carburante por provincia y municipio
+					</p>
+				</div>
+				<ThemeToggle client:load />
 			</header>
 
 			<Buscador client:load />
 
-			<footer class="mt-12 text-center text-sm text-slate-400">
+			<footer class="mt-12 text-center text-sm text-slate-400 dark:text-slate-500">
 				<p>Datos: Geoportal Gasolineras, MITECO.</p>
 			</footer>
 		</div>
