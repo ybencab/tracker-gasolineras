@@ -42,6 +42,8 @@ type Municipio struct {
 
 type Estacion struct {
 	ID           string             `json:"id"`
+	IDMunicipio  string             `json:"id_municipio"`
+	IDProvincia  string             `json:"id_provincia"`
 	Rotulo       string             `json:"rotulo"`
 	Direccion    string             `json:"direccion"`
 	CodigoPostal string             `json:"codigo_postal"`
@@ -78,6 +80,7 @@ type rawEstacionesResponse struct {
 	ListaEESSPrecio []map[string]string `json:"ListaEESSPrecio"`
 }
 
+// Provincias devuelve el listado completo de provincias.
 func (c *Client) Provincias(ctx context.Context) ([]Provincia, error) {
 	var raw []rawProvincia
 	if err := c.getJSON(ctx, "/Listados/Provincias/", &raw); err != nil {
@@ -94,10 +97,10 @@ func (c *Client) Provincias(ctx context.Context) ([]Provincia, error) {
 	return provincias, nil
 }
 
-func (c *Client) MunicipiosPorProvincia(ctx context.Context, idProvincia string) ([]Municipio, error) {
+// Municipios devuelve el listado completo de municipios de España.
+func (c *Client) Municipios(ctx context.Context) ([]Municipio, error) {
 	var raw []rawMunicipio
-	path := "/Listados/MunicipiosPorProvincia/" + idProvincia
-	if err := c.getJSON(ctx, path, &raw); err != nil {
+	if err := c.getJSON(ctx, "/Listados/Municipios/", &raw); err != nil {
 		return nil, err
 	}
 	municipios := make([]Municipio, 0, len(raw))
@@ -111,10 +114,12 @@ func (c *Client) MunicipiosPorProvincia(ctx context.Context, idProvincia string)
 	return municipios, nil
 }
 
-func (c *Client) EstacionesPorMunicipio(ctx context.Context, idMunicipio string) (EstacionesResponse, error) {
+// Estaciones devuelve todas las estaciones de servicio de España con sus
+// precios. Es una respuesta grande (~11.500 estaciones, ~12MB), pensada
+// para pedirse una vez por refresco, no por petición de usuario.
+func (c *Client) Estaciones(ctx context.Context) (EstacionesResponse, error) {
 	var raw rawEstacionesResponse
-	path := "/EstacionesTerrestres/FiltroMunicipio/" + idMunicipio
-	if err := c.getJSON(ctx, path, &raw); err != nil {
+	if err := c.getJSON(ctx, "/EstacionesTerrestres/", &raw); err != nil {
 		return EstacionesResponse{}, err
 	}
 
@@ -146,6 +151,8 @@ func parseEstacion(campos map[string]string) Estacion {
 
 	return Estacion{
 		ID:           campos["IDEESS"],
+		IDMunicipio:  campos["IDMunicipio"],
+		IDProvincia:  campos["IDProvincia"],
 		Rotulo:       campos["Rótulo"],
 		Direccion:    campos["Dirección"],
 		CodigoPostal: campos["C.P."],
@@ -174,7 +181,7 @@ func parseDecimal(valor string) (float64, bool) {
 }
 
 func (c *Client) getJSON(ctx context.Context, path string, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "curl", "-sS", "--fail", c.baseURL+path)

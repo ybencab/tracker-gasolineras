@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
+	"tracker-gasolineras-backend/internal/cache"
 	"tracker-gasolineras-backend/internal/geoportal"
 )
 
@@ -17,7 +20,29 @@ func main() {
 	if baseURL == "" {
 		baseURL = geoportal.DefaultBaseURL
 	}
+
+	refreshInterval := 24 * time.Hour
+	if v := os.Getenv("REFRESH_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			log.Fatalf("REFRESH_INTERVAL inválido (%q): %v", v, err)
+		}
+		refreshInterval = d
+	}
+
+	snapshotPath := os.Getenv("SNAPSHOT_PATH")
+	if snapshotPath == "" {
+		snapshotPath = "./data/snapshot.json"
+	}
+
 	client := geoportal.NewClient(baseURL)
+	store := cache.NewStore(client, snapshotPath)
+
+	if err := store.LoadFromDisk(); err != nil {
+		log.Printf("sin snapshot previo en disco (%v); se servirá en cuanto termine el primer refresco", err)
+	}
+
+	go store.Start(context.Background(), refreshInterval)
 
 	mux := http.NewServeMux()
 
@@ -27,9 +52,9 @@ func main() {
 	})
 
 	mux.HandleFunc("GET /api/provincias", func(w http.ResponseWriter, r *http.Request) {
-		provincias, err := client.Provincias(r.Context())
-		if err != nil {
-			writeError(w, err)
+		provincias, ok := store.Provincias()
+		if !ok {
+			writeSinDatos(w)
 			return
 		}
 		writeJSON(w, provincias)
@@ -41,9 +66,9 @@ func main() {
 			http.Error(w, "falta el parámetro 'provincia'", http.StatusBadRequest)
 			return
 		}
-		municipios, err := client.MunicipiosPorProvincia(r.Context(), idProvincia)
-		if err != nil {
-			writeError(w, err)
+		municipios, ok := store.MunicipiosPorProvincia(idProvincia)
+		if !ok {
+			writeSinDatos(w)
 			return
 		}
 		writeJSON(w, municipios)
@@ -55,12 +80,12 @@ func main() {
 			http.Error(w, "falta el parámetro 'municipio'", http.StatusBadRequest)
 			return
 		}
-		estaciones, err := client.EstacionesPorMunicipio(r.Context(), idMunicipio)
-		if err != nil {
-			writeError(w, err)
+		fecha, estaciones, ok := store.EstacionesPorMunicipio(idMunicipio)
+		if !ok {
+			writeSinDatos(w)
 			return
 		}
-		writeJSON(w, estaciones)
+		writeJSON(w, geoportal.EstacionesResponse{Fecha: fecha, Estaciones: estaciones})
 	})
 
 	port := os.Getenv("PORT")
@@ -88,9 +113,10 @@ func writeJSON(w http.ResponseWriter, data any) {
 	json.NewEncoder(w).Encode(data)
 }
 
-func writeError(w http.ResponseWriter, err error) {
-	log.Println(err)
-	http.Error(w, "error consultando el Geoportal Gasolineras", http.StatusBadGateway)
+// writeSinDatos se usa mientras el primer refresco en background todavía
+// no ha terminado (y no había snapshot previo en disco).
+func writeSinDatos(w http.ResponseWriter) {
+	http.Error(w, "aún no hay datos cargados, inténtalo de nuevo en unos segundos", http.StatusServiceUnavailable)
 }
 
 // loadDotEnv carga variables desde un fichero .env (si existe) sin
